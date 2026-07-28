@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('/Users/create/Sites/tools/sharing_models/ollama_mapper.py'\\).read\\(\\)\\)\")"
+    ]
+  }
+}

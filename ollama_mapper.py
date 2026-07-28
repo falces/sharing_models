@@ -75,10 +75,11 @@ def create_symlinks(base_path, models):
     destination = Path(destination_answer).expanduser() if destination_answer else default_destination
 
     destination.mkdir(parents=True, exist_ok=True)
+    blobs_dir = base_path / "blobs"
 
-    created = 0
+    link_specs = []
     for model in models:
-        source = base_path / "blobs" / model["blob_filename"]
+        source = blobs_dir / model["blob_filename"]
 
         if not source.exists():
             print(f"Warning: blob not found {source}, skipping")
@@ -90,7 +91,37 @@ def create_symlinks(base_path, models):
             destination / f"{model_label}.gguf",
             destination / "lmstudio-community" / f"{model_label}-GGUF" / f"{model_label}.gguf",
         ]
+        link_specs.append((source, links))
 
+    expected_links = {link for _, links in link_specs for link in links}
+
+    # Remove links from previous runs that no longer match a current model
+    # (e.g. the model was removed from Ollama)
+    removed = 0
+    for path in destination.rglob("*.gguf"):
+        if not path.is_symlink():
+            continue
+
+        try:
+            target = Path(os.readlink(path))
+        except OSError:
+            continue
+
+        if target.parent == blobs_dir and path not in expected_links:
+            path.unlink()
+            print(f"Stale link removed: {path}")
+            removed += 1
+
+    lmstudio_dir = destination / "lmstudio-community"
+    if lmstudio_dir.is_dir():
+        for subdir in lmstudio_dir.iterdir():
+            if subdir.is_dir() and not any(subdir.iterdir()):
+                subdir.rmdir()
+        if not any(lmstudio_dir.iterdir()):
+            lmstudio_dir.rmdir()
+
+    created = 0
+    for source, links in link_specs:
         for link in links:
             link.parent.mkdir(parents=True, exist_ok=True)
 
@@ -101,7 +132,7 @@ def create_symlinks(base_path, models):
             print(f"Link created: {link} -> {source}")
             created += 1
 
-    print(f"\n{created} link(s) created in {destination}")
+    print(f"\n{created} link(s) created, {removed} stale link(s) removed in {destination}")
 
 if __name__ == "__main__":
     result = get_model_mapping()
